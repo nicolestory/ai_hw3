@@ -1,15 +1,12 @@
 import gym
+import random
 import sys
+import time
+from matplotlib import pyplot
 
 
 def main(number_of_episodes, timesteps_per_episode):
     env = gym.make('MountainCar-v0')
-
-    print('obs space, high, low')
-    print(env.observation_space)
-    print(env.observation_space.high)
-    print(env.observation_space.low)
-    print('--------------------')
 
     algorithms = set_up_algorithm_objects(env.action_space, env.observation_space)
 
@@ -18,11 +15,21 @@ def main(number_of_episodes, timesteps_per_episode):
             print('Starting episode {}'.format(i_episode))
             observation = env.reset()
             print('Observation: {}'.format(observation))
+
+            positions = [observation[0]]
+            velocities = [observation[1]]
+            times = [-1]
+
             for t in range(timesteps_per_episode):
                 print('t = {}'.format(t))
                 env.render()
                 action = algorithm.choose_next_action(observation)
                 next_observation, reward, done, info = env.step(action)
+
+                positions.append(next_observation[0])
+                velocities.append(next_observation[1])
+                times.append(t)
+
                 algorithm.learn(observation, next_observation, action, reward)
 
                 if done:
@@ -31,14 +38,17 @@ def main(number_of_episodes, timesteps_per_episode):
                     break
 
                 observation = next_observation
+                #time.sleep(0.5)
+        #pyplot.plot(times, positions)
+        pyplot.plot(times, velocities)
+        pyplot.show()
+
+        print('Max: {}'.format(max([state[1] for state in algorithm.states])))
     env.close()
 
 
-def set_up_algorithm_objects(actions, states, number_of_states=20):
+def set_up_algorithm_objects(actions, states, number_of_states=50):
     algorithm_objects = []
-
-    # TODO: Delete later.
-    algorithm_objects.append(NicoleLearningHowGymWorks())
 
     # Translate the actions into a list
     print(actions)
@@ -58,21 +68,70 @@ def set_up_algorithm_objects(actions, states, number_of_states=20):
     
     algorithm_objects.append(QLearning(discrete_states, actions))
 
+    # TODO: Delete later.
+    #algorithm_objects.append(NicoleLearningHowGymWorks())
+
     return algorithm_objects
 
 
 class QLearning:
     def __init__(self, states, actions):
+        self.states = states
+        self.actions = actions
+        self.learning_rate = 0.5
+        self.discount = 0.5
         self.q_table = {}
         for state in states:
             for action in actions:
                 self.q_table[state, action] = 0
 
     def choose_next_action(self, observation):
-        return 1
+        # Choose the state-action pairs from the q-table
+        state = self.observation_to_state(observation)
+        viable_state_actions = [state_action for state_action in self.q_table.keys() if state_action[0] == state]
+
+        # Get the Q-values for each state-action
+        q_values = [self.q_table[state_action] for state_action in viable_state_actions]
+        biggest_q_value = max(q_values)
+        if q_values.count(biggest_q_value) < 1:
+            # If multiple Q-values are tied, return a random action from the possible actions
+            highest_state_actions = [viable_state_actions[index] for index in range(len(viable_state_actions)) if q_values[index] == biggest_q_value]
+            return random.choice(highest_state_actions)
+
+        # Otherwise, just choose the largest Q-value
+        chosen_index = q_values.index(max(q_values))
+        action = viable_state_actions[chosen_index][1]
+        print('State: {}'.format(state))
+        print('Action: {}'.format(action))
+        return action
 
     def learn(self, last_state, next_state, action, reward):
-        pass
+        last_state = self.observation_to_state(last_state)
+        next_state = self.observation_to_state(next_state)
+        old_q_value = self.q_table[last_state, action]
+        learned_value = reward + self.discount * max([self.q_table[next_state, action] for action in self.actions])
+        updated_q_value = old_q_value + self.learning_rate * (learned_value - old_q_value)
+        print('Updated q value: {}'.format(updated_q_value))
+        print('  other q values: {}'.format([self.q_table[last_state, action] for action in self.actions]))
+        self.q_table[last_state, action] = updated_q_value
+
+    def observation_to_state(self, observation):
+        closest_state = None
+        closest_distances = None
+        for state in self.states:
+            distances = [abs(state[index] - observation[index]) for index in range(len(state))]
+            if closest_state is None:
+                # This is the first time through the loop. Set the closest state & distance
+                closest_state = state
+                closest_distances = distances
+
+            distance_delta = [closest_distances[i] - distances[i] for i in range(len(state))]
+            if min(distance_delta) >= 0:
+                # This state is closer than the previous closest state
+                closest_state = state
+                closest_distances = distances
+
+        return closest_state
 
 
 class NicoleLearningHowGymWorks:
@@ -98,14 +157,15 @@ class NicoleLearningHowGymWorks:
 
 
 if __name__ == '__main__':
+    # Parse the command line args
     if len(sys.argv) >= 2:
         number_of_episodes = int(sys.argv[1])
     else:
-        number_of_episodes = 20
+        number_of_episodes = 1
 
     if len(sys.argv) >= 3:
         timesteps_per_episode = int(sys.argv[2])
     else:
-        timesteps_per_episode = 100
+        timesteps_per_episode = 201
 
     main(number_of_episodes, timesteps_per_episode)
