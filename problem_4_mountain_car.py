@@ -15,69 +15,13 @@ def main(number_of_runs_per_algorithm, gui=False):
     for algorithm in algorithms:
         episode_counts[algorithm.algorithm_name] = []
         for run_num in range(number_of_runs_per_algorithm):
+            # Run the algorithm, and save the number of episodes it took to reach the goal
             print('Starting Run {} of {} algorithm'.format(run_num, algorithm.algorithm_name))
             episode_count = algorithm.run(env)
             episode_counts[algorithm.algorithm_name].append(episode_count)
             algorithm.reset()
 
     print(episode_counts)
-
-    '''
-    for algorithm in algorithms:
-        reached_the_goal = False
-        episode_count = 0
-        while not reached_the_goal:
-            print('Starting episode {}'.format(episode_count))
-            observation = env.reset()
-            #print('Observation: {}'.format(observation))
-
-            positions = [observation[0]]
-            velocities = [observation[1]]
-            times = [-1]
-            actions = []
-            t = 0
-
-            while not reached_the_goal:
-                #env.render()
-                action = algorithm.choose_next_action(observation)
-                next_observation, reward, done, info = env.step(action)
-
-                positions.append(next_observation[0])
-                velocities.append(next_observation[1])
-                times.append(t)
-                actions.append(action)
-
-                algorithm.learn(observation, next_observation, action, reward)
-
-                if done:
-                    print("Episode finished after {} timesteps".format(t+1))
-                    #print('Final observation: {}'.format(next_observation))
-
-                    #print('Actions: {}'.format(actions))
-                    print('Max position: {}'.format(max(positions)))
-                    print('Min position: {}'.format(min(positions)))
-                    print('Max velocity: {}'.format(max(velocities)))
-                    print('Min velocity: {}'.format(min(velocities)))
-
-                    if 'TimeLimit.truncated' in info:
-                        print('Time out\n')
-                    else:
-                        # If done and not TimeLimit.truncated, then we've reached the goal.
-                        reached_the_goal = True
-                        print('Reached the goal in {} episodes, and {} extra timesteps'.format(episode_count, t))
-                    break
-
-                observation = next_observation
-                t += 1
-                #time.sleep(0.5)
-            #pyplot.plot(times, positions)
-            #pyplot.plot(times, velocities)
-            #pyplot.show()
-            #pyplot.clf()
-
-            episode_count += 1
-
-    '''
 
     env.close()
 
@@ -96,6 +40,7 @@ def set_up_algorithm_objects(actions, states, number_of_states=8, show_the_gui=F
     step_size = states_difference / (number_of_states - 1)
     discrete_states = []
 
+    # Generate combinations of positions and velocities
     for position_number in range(number_of_states):
         for velocity_number in range(number_of_states):
             position = states.low[0] + step_size[0] * position_number
@@ -103,6 +48,7 @@ def set_up_algorithm_objects(actions, states, number_of_states=8, show_the_gui=F
             state = (position, velocity)
             discrete_states.append(state)
 
+    # Create the algorithm objects
     algorithm_objects.append(QLearning(discrete_states, actions, show_the_gui))
     algorithm_objects.append(SARSA(discrete_states, actions, show_the_gui))
     algorithm_objects.append(ExpectedSARSA(discrete_states, actions, show_the_gui))
@@ -160,6 +106,7 @@ class QLearning:
         return action
 
     def learn(self, last_state, next_state, action, reward):
+        # Update the Q-Table based on states, action, and reward
         last_state = self.observation_to_state(last_state)
         next_state = self.observation_to_state(next_state)
         old_q_value = self.q_table[last_state, action]
@@ -168,6 +115,7 @@ class QLearning:
         self.q_table[last_state, action] = updated_q_value
 
     def observation_to_state(self, observation):
+        # Take an observation (continuous) and produce the nearest state (discrete)
         closest_state = None
         closest_distances = None
         for state in self.states:
@@ -186,42 +134,26 @@ class QLearning:
         return closest_state
 
     def run(self, env):
+        # Run as many episodes as it takes to reach the goal. Returns the number of episodes it took to reach the
+        # goal.
         reached_the_goal = False
         episode_count = 0
         while not reached_the_goal:
             observation = env.reset()
-            #print('Observation: {}'.format(observation))
-
-            positions = [observation[0]]
-            velocities = [observation[1]]
-            times = [-1]
-            actions = []
             t = 0
 
             while not reached_the_goal:
                 if self.show_gui:
+                    # Only show the GUI if requested. It's much faster without.
                     env.render()
+
                 action = self.choose_next_action(observation)
                 next_observation, reward, done, info = env.step(action)
-
-                positions.append(next_observation[0])
-                velocities.append(next_observation[1])
-                times.append(t)
-                actions.append(action)
-
                 self.learn(observation, next_observation, action, reward)
 
                 if done:
-                    #print("Episode finished after {} timesteps".format(t+1))
-                    #print('Final observation: {}'.format(next_observation))
-
-                    #print('Actions: {}'.format(actions))
-                    #print('Max position: {}'.format(max(positions)))
-                    #print('Min position: {}'.format(min(positions)))
-                    #print('Max velocity: {}'.format(max(velocities)))
-                    #print('Min velocity: {}'.format(min(velocities)))
-
                     if 'TimeLimit.truncated' in info:
+                        # The episode is done because we've run out of time.
                         print('Episode {}: Time out'.format(episode_count))
                     else:
                         # If done and not TimeLimit.truncated, then we've reached the goal.
@@ -231,11 +163,6 @@ class QLearning:
 
                 observation = next_observation
                 t += 1
-                #time.sleep(0.5)
-            #pyplot.plot(times, positions)
-            #pyplot.plot(times, velocities)
-            #pyplot.show()
-            #pyplot.clf()
 
             episode_count += 1
 
@@ -245,7 +172,8 @@ class QLearning:
 class SARSA(QLearning):
     algorithm_name = 'SARSA'
 
-    def learn(self, last_state, action, reward, next_state, next_action):
+    def learn(self, last_state, action, reward, next_state, next_action=None):
+        # Update the Q-table based on states, actions, and the reward
         last_state = self.observation_to_state(last_state)
         next_state = self.observation_to_state(next_state)
         old_q_value = self.q_table[last_state, action]
@@ -254,43 +182,24 @@ class SARSA(QLearning):
         self.q_table[last_state, action] = updated_q_value
 
     def run(self, env):
+        # Run as many episodes as it takes to reach the goal. Returns the number of episodes it took to reach the
+        # goal.
         reached_the_goal = False
         episode_count = 0
         while not reached_the_goal:
-            print('Starting episode {}'.format(episode_count))
             observation = env.reset()
             action = self.choose_next_action(observation)
-
-            positions = [observation[0]]
-            velocities = [observation[1]]
-            times = [-1]
-            actions = []
             t = 0
 
             while not reached_the_goal:
                 if self.show_gui:
                     env.render()
+
                 next_observation, reward, done, info = env.step(action)
-
-                positions.append(next_observation[0])
-                velocities.append(next_observation[1])
-                times.append(t)
-                actions.append(action)
-
                 next_action = self.choose_next_action(observation)
-
                 self.learn(observation, action, reward, next_observation, next_action)
 
                 if done:
-                    #print("Episode finished after {} timesteps".format(t+1))
-                    #print('Final observation: {}'.format(next_observation))
-
-                    #print('Actions: {}'.format(actions))
-                    #print('Max position: {}'.format(max(positions)))
-                    #print('Min position: {}'.format(min(positions)))
-                    #print('Max velocity: {}'.format(max(velocities)))
-                    #print('Min velocity: {}'.format(min(velocities)))
-
                     if 'TimeLimit.truncated' in info:
                         print('Episode {}: Time out'.format(episode_count))
                     else:
@@ -302,11 +211,6 @@ class SARSA(QLearning):
                 observation = next_observation
                 action = next_action
                 t += 1
-                #time.sleep(0.5)
-            #pyplot.plot(times, positions)
-            #pyplot.plot(times, velocities)
-            #pyplot.show()
-            #pyplot.clf()
 
             episode_count += 1
 
@@ -317,6 +221,7 @@ class ExpectedSARSA(QLearning):
     algorithm_name = 'Expected SARSA'
 
     def learn(self, last_state, next_state, action, reward):
+        # Update the Q-Table based on states, action, and reward
         last_state = self.observation_to_state(last_state)
         next_state = self.observation_to_state(next_state)
         old_q_value = self.q_table[last_state, action]
@@ -325,13 +230,13 @@ class ExpectedSARSA(QLearning):
         self.q_table[last_state, action] = updated_q_value
 
     def pi(self, state, action):
+        # Gets the probability that the given action will be chosen from the given state
         # First, get the state-action pairs that match this action
         state_action_pairs = [state_action for state_action in self.q_table.keys() if state_action[0] == state]
 
         # Get the Q-values for each state-action
         q_values = [self.q_table[state_action] for state_action in state_action_pairs]
         biggest_q_value = max(q_values)
-        #if q_values.count(biggest_q_value) > 1:
 
         # If the given action has the biggest q value, then it (and others with the same q-value)
         # will be chosen with a (1-epsilon) chance.
@@ -339,7 +244,7 @@ class ExpectedSARSA(QLearning):
             return (1 - self.epsilon) / q_values.count(biggest_q_value)
 
         # Otherwise, there's an (epsilon) chance of selecting an action with a lower q-value.
-        return self.epsilon / (len(q_values) - len(q_values.count(biggest_q_value)))
+        return self.epsilon / (len(q_values) - q_values.count(biggest_q_value))
 
 
 class NicoleLearningHowGymWorks(QLearning):
