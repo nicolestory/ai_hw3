@@ -1,11 +1,10 @@
 import gym
 import random
 import sys
-import time
-from matplotlib import pyplot
+import json
 
 
-def main(number_of_runs_per_algorithm, gui=False):
+def main(number_of_runs_per_algorithm, number_of_wins_per_run, gui=False):
     env = gym.make('MountainCar-v0')
 
     algorithms = set_up_algorithm_objects(env.action_space, env.observation_space, show_the_gui=gui)
@@ -15,13 +14,24 @@ def main(number_of_runs_per_algorithm, gui=False):
     for algorithm in algorithms:
         episode_counts[algorithm.algorithm_name] = []
         for run_num in range(number_of_runs_per_algorithm):
-            # Run the algorithm, and save the number of episodes it took to reach the goal
-            print('Starting Run {} of {} algorithm'.format(run_num, algorithm.algorithm_name))
-            episode_count = algorithm.run(env)
-            episode_counts[algorithm.algorithm_name].append(episode_count)
+            iterations_count_list = []
+            for win_num in range(number_of_wins_per_run):
+                # Run the algorithm, and save the number of episodes it took to reach the goal
+                print('Starting Run {} of {} algorithm (win {})'.format(run_num, algorithm.algorithm_name, win_num))
+                episode_count = algorithm.run(env)
+                iterations_count_list.append(episode_count)
+                print(iterations_count_list)
+
+                with open('results_2.txt', 'w') as file:
+                    json.dump(episode_counts, file)
+            episode_counts[algorithm.algorithm_name].append(iterations_count_list)
             algorithm.reset()
+            print(episode_counts)
 
     print(episode_counts)
+
+    with open('results_2.txt', 'w') as file:
+        json.dump(episode_counts, file)
 
     env.close()
 
@@ -284,5 +294,10 @@ if __name__ == '__main__':
     else:
         number_of_runs = 1
 
+    if len(sys.argv) >= 3:
+        number_of_wins = int(sys.argv[2])
+    else:
+        number_of_wins = 1
+
     # Run the algorithms and make plots
-    main(number_of_runs, show_gui)
+    main(number_of_runs, number_of_wins, show_gui)
